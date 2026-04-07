@@ -1,0 +1,5 @@
+{
+  "watch": ["server.js", "services"],
+  "ignore": ["node_modules", ".env"],
+  "delay": "500"
+}
