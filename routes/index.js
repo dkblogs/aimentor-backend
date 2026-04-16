@@ -192,6 +192,19 @@ router.post('/quiz-score', async (req, res) => {
   }
 });
 
+// Return list of topic titles the user has struggled with (for UI highlighting)
+router.get('/weak-topics/:userId/:subject', async (req, res) => {
+  try {
+    const { userId, subject } = req.params;
+    const weak = await memoryService.getWeakAreas(userId, decodeURIComponent(subject), 50);
+    // Deduplicate topic titles
+    const weakTopics = [...new Set(weak.map(w => w.topic).filter(Boolean))];
+    res.json({ weakTopics });
+  } catch (error) {
+    res.json({ weakTopics: [] });
+  }
+});
+
 router.get('/quiz-scores/:userId', async (req, res) => {
   try {
     const scores = await memoryService.getQuizScores(req.params.userId);
