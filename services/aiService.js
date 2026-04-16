@@ -69,8 +69,8 @@ async function generateResponse(message, subject = "General", history = [], diff
 
     return { reply, followups };
   } catch (error) {
-    console.error("Groq ERROR:", error.message);
-    return { reply: "AI is temporarily unavailable. Please try again.", followups: [] };
+    console.error("Groq ERROR:", error.status, error.message);
+    throw error;  // let route handler catch and log properly
   }
 }
 
