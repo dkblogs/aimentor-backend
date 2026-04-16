@@ -6,7 +6,7 @@ const fs      = require('fs');
 const { generateResponse, generateQuiz, teachLesson, analyzeStudentPerformance } = require('../services/aiService');
 const memoryService = require('../services/memoryService');
 const didService    = require('../services/didService');
-const { elevenLabsTTS } = require('../services/ttsService');
+const { synthesise } = require('../services/ttsService');
 
 const QUIZ_KEYWORDS = ['quiz', 'test my knowledge', 'generate a quiz', 'knowledge check'];
 
@@ -51,7 +51,7 @@ router.post('/chat', async (req, res) => {
       reply = result.reply;
       quiz  = result.quiz;
     } else {
-      const result = await generateResponse(message, subject, history, difficulty);
+      const result = await generateResponse(message, subject, history, difficulty, language);
       reply     = result.reply;
       followups = result.followups;
     }
@@ -162,12 +162,16 @@ router.post('/profile/:userId', async (req, res) => {
 router.post('/tts', async (req, res) => {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: 'Text required' });
-  if (!process.env.ELEVENLABS_API_KEY) return res.status(503).json({ error: 'TTS not configured' });
+
+  const hasAnyTTS = process.env.FISH_AUDIO_API_KEY || process.env.ELEVENLABS_API_KEY;
+  if (!hasAnyTTS) return res.status(503).json({ error: 'No TTS provider configured' });
+
   try {
-    const audioBuffer = await elevenLabsTTS(text);
+    const { audio, provider } = await synthesise(text);
     res.set('Content-Type', 'audio/mpeg');
     res.set('Cache-Control', 'no-store');
-    res.send(Buffer.from(audioBuffer));
+    res.set('X-TTS-Provider', provider);
+    res.send(Buffer.from(audio));
   } catch (error) {
     console.error('TTS error:', error.message);
     res.status(500).json({ error: 'TTS failed' });

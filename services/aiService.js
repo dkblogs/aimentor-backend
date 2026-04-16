@@ -25,11 +25,14 @@ const DIFFICULTY_NOTES = {
 const LANGUAGE_INSTRUCTION = `CRITICAL LANGUAGE RULE: Detect the language of the user's message and respond ENTIRELY in that same language. If the user writes in Hindi, respond in Hindi. If in Hinglish (Hindi+English mix), respond in Hinglish. If in Tamil, respond in Tamil. If in any regional language, respond in that language. Never switch languages unless the user does. Do NOT translate or summarise in another language.`;
 
 // ── Chat with follow-ups ──────────────────────────────────────────────────────
-async function generateResponse(message, subject = "General", history = [], difficulty = "Intermediate") {
+async function generateResponse(message, subject = "General", history = [], difficulty = "Intermediate", language = "en") {
   try {
     const subjectPrompt = SUBJECT_PROMPTS[subject] || SUBJECT_PROMPTS.General;
     const diffNote      = DIFFICULTY_NOTES[difficulty] || DIFFICULTY_NOTES.Intermediate;
-    const systemPrompt  = `${subjectPrompt} ${diffNote} ${LANGUAGE_INSTRUCTION} After your answer, add exactly this line: "FOLLOWUPS: question1 | question2 | question3" with 3 short follow-up questions the student might ask next (write them in the same language as your response).`;
+    const langInstruction = language && language !== "en"
+      ? `CRITICAL: You MUST respond ENTIRELY in the language with code "${language}". Do NOT use English except for technical/scientific terms. Write everything — explanations, examples, follow-up questions — in that language.`
+      : LANGUAGE_INSTRUCTION;
+    const systemPrompt  = `${subjectPrompt} ${diffNote} ${langInstruction} After your answer, add exactly this line: "FOLLOWUPS: question1 | question2 | question3" with 3 short follow-up questions the student might ask next (write them in the same language as your response).`;
 
     const historyMessages = history.slice(-5).flatMap(h => [
       { role: "user",      content: h.message  },
