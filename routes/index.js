@@ -77,11 +77,15 @@ router.post('/chat-stream', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // disable Nginx/Render proxy buffering
     res.flushHeaders();
 
-    // Send scene immediately so frontend can update 3D view without waiting
-    const scene = detectScene(message);
-    res.write(`data: ${JSON.stringify({ scene })}\n\n`);
+    const write = (obj) => {
+      res.write(`data: ${JSON.stringify(obj)}\n\n`);
+      if (typeof res.flush === 'function') res.flush(); // flush compression middleware if present
+    };
+
+    write({ scene: detectScene(message) });
 
     const stream = await generateResponseStream(message, subject, history, difficulty, language);
     let full = '';
@@ -90,7 +94,7 @@ router.post('/chat-stream', async (req, res) => {
       const token = chunk.choices[0]?.delta?.content || '';
       if (token) {
         full += token;
-        res.write(`data: ${JSON.stringify({ token })}\n\n`);
+        write({ token });
       }
     }
 
@@ -101,14 +105,14 @@ router.post('/chat-stream', async (req, res) => {
       : [];
     const reply = full.replace(/FOLLOWUPS:.*$/m, '').trim();
 
-    res.write(`data: ${JSON.stringify({ done: true, reply, followups })}\n\n`);
+    write({ done: true, reply, followups });
 
     memoryService.saveToHistory(userId || 'guest', message, reply).catch(() => {});
     res.end();
   } catch (error) {
     console.error('Chat stream error:', error);
-    res.write(`data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`);
-    res.end();
+    if (!res.headersSent) res.status(500).json({ error: 'Stream failed' });
+    else { res.write(`data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`); res.end(); }
   }
 });
 
