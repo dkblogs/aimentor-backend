@@ -3,7 +3,7 @@ require('dotenv').config();
 console.log("ENV CHECK:");
 console.log("SUPABASE_URL:", process.env.SUPABASE_URL);
 console.log("SUPABASE_KEY:", process.env.SUPABASE_ANON_KEY ? "OK" : "MISSING");
-console.log("GROQ_KEY:", process.env.GROQ_API_KEY ? "OK" : "MISSING");
+console.log("OPENROUTER_KEY:", process.env.OPENROUTER_API_KEY ? "OK" : "MISSING");
 
 const express = require('express');
 const cors = require('cors');

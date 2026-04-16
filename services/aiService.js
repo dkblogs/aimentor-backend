@@ -1,6 +1,44 @@
-const Groq = require("groq-sdk");
+const OpenAI = require("openai");
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const openrouter = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY,
+  defaultHeaders: {
+    "HTTP-Referer": process.env.FRONTEND_URL || "https://aimentor.vercel.app",
+    "X-Title": "AI Mentor",
+  },
+});
+
+// Models in fallback order — if primary is rate-limited, try next
+const MODELS = [
+  "openai/gpt-oss-120b:free",
+  "qwen/qwen3-next-80b-a3b-instruct:free",
+  "google/gemma-4-26-a4b-it:free",
+];
+
+async function chatWithFallback(messages, { temperature = 0.7, max_tokens = 1200 } = {}) {
+  let lastError;
+  for (const model of MODELS) {
+    try {
+      const completion = await openrouter.chat.completions.create({
+        model,
+        messages,
+        temperature,
+        max_tokens,
+      });
+      return completion;
+    } catch (err) {
+      // 429 = rate limit, 503 = model overloaded → try next model
+      if (err.status === 429 || err.status === 503 || err.status === 502) {
+        console.warn(`Model ${model} unavailable (${err.status}), trying next…`);
+        lastError = err;
+        continue;
+      }
+      throw err; // auth errors, bad request etc — don't retry
+    }
+  }
+  throw lastError;
+}
 
 const SUBJECT_PROMPTS = {
   // NCERT Class 9 subjects
@@ -49,16 +87,14 @@ async function generateResponse(message, subject = "General", history = [], diff
       { role: "assistant", content: h.response },
     ]);
 
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
+    const completion = await chatWithFallback(
+      [
         { role: "system", content: systemPrompt },
         ...historyMessages,
         { role: "user",   content: message },
       ],
-      temperature: 0.7,
-      max_tokens: 1200,
-    });
+      { temperature: 0.7, max_tokens: 1200 }
+    );
 
     const full = completion.choices[0]?.message?.content || "";
     const followupMatch = full.match(/FOLLOWUPS:\s*(.+)$/m);
@@ -117,15 +153,13 @@ Write the lesson using this exact structure with markdown:
 
 After the lesson content add exactly: "FOLLOWUPS: question1 | question2 | question3"`;
 
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
+    const completion = await chatWithFallback(
+      [
         { role: "system", content: `You are an expert ${subject} teacher for NCERT Class ${classLevel}. Deliver structured, engaging lessons using markdown. Stay aligned with NCERT content. ${langNote}` },
         { role: "user",   content: prompt },
       ],
-      temperature: 0.65,
-      max_tokens: 1500,
-    });
+      { temperature: 0.65, max_tokens: 1500 }
+    );
 
     const full = completion.choices[0]?.message?.content || "";
     const followupMatch = full.match(/FOLLOWUPS:\s*(.+)$/m);
@@ -156,15 +190,13 @@ Return ONLY valid JSON, no markdown:
   ]
 }`;
 
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
+    const completion = await chatWithFallback(
+      [
         { role: "system", content: "You are a quiz generator. Return only valid JSON, no extra text." },
         { role: "user",   content: prompt },
       ],
-      temperature: 0.5,
-      max_tokens: 1200,
-    });
+      { temperature: 0.5, max_tokens: 1200 }
+    );
 
     const rawText  = completion.choices[0]?.message?.content?.trim() || "";
     const jsonText = rawText.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
@@ -233,15 +265,13 @@ Provide a concise but insightful analysis. Return ONLY valid JSON:
   "actionItems": ["Specific, actionable recommendation 1", "Specific recommendation 2", "Specific recommendation 3"]
 }`;
 
-    const completion = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [
+    const completion = await chatWithFallback(
+      [
         { role: "system", content: "You are a data-driven academic mentor. Write specific, encouraging, actionable feedback. Return only valid JSON." },
         { role: "user",   content: prompt },
       ],
-      temperature: 0.5,
-      max_tokens: 500,
-    });
+      { temperature: 0.5, max_tokens: 500 }
+    );
 
     const raw   = completion.choices[0]?.message?.content?.trim() || "{}";
     const clean = raw.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();

@@ -41,7 +41,7 @@ router.post('/chat', async (req, res) => {
   try {
     const { message, userId, subject = 'General', difficulty = 'Intermediate', history = [], classLevel = 9, language = 'en' } = req.body;
     if (!message) return res.status(400).json({ error: 'Message is required' });
-    if (!process.env.GROQ_API_KEY) return res.status(503).json({ error: 'GROQ_API_KEY not configured on server' });
+    if (!process.env.OPENROUTER_API_KEY) return res.status(503).json({ error: 'OPENROUTER_API_KEY not configured on server' });
 
     const isQuizRequest = QUIZ_KEYWORDS.some(kw => message.toLowerCase().includes(kw));
 
