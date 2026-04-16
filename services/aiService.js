@@ -28,13 +28,36 @@ async function chatWithFallback(messages, { temperature = 0.7, max_tokens = 1200
       });
       return completion;
     } catch (err) {
-      // 429 = rate limit, 503 = model overloaded → try next model
       if (err.status === 429 || err.status === 503 || err.status === 502) {
         console.warn(`Model ${model} unavailable (${err.status}), trying next…`);
         lastError = err;
         continue;
       }
-      throw err; // auth errors, bad request etc — don't retry
+      throw err;
+    }
+  }
+  throw lastError;
+}
+
+async function chatWithFallbackStream(messages, { temperature = 0.7, max_tokens = 1200 } = {}) {
+  let lastError;
+  for (const model of MODELS) {
+    try {
+      const stream = await openrouter.chat.completions.create({
+        model,
+        messages,
+        temperature,
+        max_tokens,
+        stream: true,
+      });
+      return stream;
+    } catch (err) {
+      if (err.status === 429 || err.status === 503 || err.status === 502) {
+        console.warn(`Stream: model ${model} unavailable (${err.status}), trying next…`);
+        lastError = err;
+        continue;
+      }
+      throw err;
     }
   }
   throw lastError;
@@ -106,8 +129,30 @@ async function generateResponse(message, subject = "General", history = [], diff
     return { reply, followups };
   } catch (error) {
     console.error("Groq ERROR:", error.status, error.message);
-    throw error;  // let route handler catch and log properly
+    throw error;
   }
+}
+
+// ── Streaming chat (returns async iterable + system prompt for followup parsing) ─
+async function generateResponseStream(message, subject = "General", history = [], difficulty = "Intermediate", language = "en") {
+  const subjectPrompt    = SUBJECT_PROMPTS[subject] || SUBJECT_PROMPTS.General;
+  const diffNote         = DIFFICULTY_NOTES[difficulty] || DIFFICULTY_NOTES.Intermediate;
+  const langInstruction  = buildLangInstruction(language);
+  const systemPrompt     = `${subjectPrompt} ${diffNote} ${langInstruction} After your answer, add exactly this line: "FOLLOWUPS: question1 | question2 | question3" with 3 short follow-up questions the student might ask next (write them in the same language as your response).`;
+
+  const historyMessages = history.slice(-5).flatMap(h => [
+    { role: "user",      content: h.message  },
+    { role: "assistant", content: h.response },
+  ]);
+
+  return chatWithFallbackStream(
+    [
+      { role: "system", content: systemPrompt },
+      ...historyMessages,
+      { role: "user",   content: message },
+    ],
+    { temperature: 0.7, max_tokens: 1200 }
+  );
 }
 
 // ── Structured lesson delivery ────────────────────────────────────────────────
@@ -290,4 +335,4 @@ Provide a concise but insightful analysis. Return ONLY valid JSON:
   }
 }
 
-module.exports = { generateResponse, generateQuiz, teachLesson, analyzeStudentPerformance };
+module.exports = { generateResponse, generateResponseStream, generateQuiz, teachLesson, analyzeStudentPerformance };

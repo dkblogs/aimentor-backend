@@ -3,7 +3,7 @@ const router  = express.Router();
 const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
-const { generateResponse, generateQuiz, teachLesson, analyzeStudentPerformance } = require('../services/aiService');
+const { generateResponse, generateResponseStream, generateQuiz, teachLesson, analyzeStudentPerformance } = require('../services/aiService');
 const memoryService = require('../services/memoryService');
 const didService    = require('../services/didService');
 const { synthesise } = require('../services/ttsService');
@@ -64,6 +64,51 @@ router.post('/chat', async (req, res) => {
   } catch (error) {
     console.error('Chat error:', error);
     res.status(500).json({ error: 'Failed to process chat' });
+  }
+});
+
+// ── Chat stream (SSE) ────────────────────────────────────────────────────────
+router.post('/chat-stream', async (req, res) => {
+  try {
+    const { message, userId, subject = 'General', difficulty = 'Intermediate', history = [], language = 'en' } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message is required' });
+    if (!process.env.OPENROUTER_API_KEY) return res.status(503).json({ error: 'OPENROUTER_API_KEY not configured' });
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    // Send scene immediately so frontend can update 3D view without waiting
+    const scene = detectScene(message);
+    res.write(`data: ${JSON.stringify({ scene })}\n\n`);
+
+    const stream = await generateResponseStream(message, subject, history, difficulty, language);
+    let full = '';
+
+    for await (const chunk of stream) {
+      const token = chunk.choices[0]?.delta?.content || '';
+      if (token) {
+        full += token;
+        res.write(`data: ${JSON.stringify({ token })}\n\n`);
+      }
+    }
+
+    // Parse followups from the complete accumulated text
+    const followupMatch = full.match(/FOLLOWUPS:\s*(.+)$/m);
+    const followups = followupMatch
+      ? followupMatch[1].split('|').map(s => s.trim()).filter(Boolean).slice(0, 3)
+      : [];
+    const reply = full.replace(/FOLLOWUPS:.*$/m, '').trim();
+
+    res.write(`data: ${JSON.stringify({ done: true, reply, followups })}\n\n`);
+
+    memoryService.saveToHistory(userId || 'guest', message, reply).catch(() => {});
+    res.end();
+  } catch (error) {
+    console.error('Chat stream error:', error);
+    res.write(`data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`);
+    res.end();
   }
 });
 
