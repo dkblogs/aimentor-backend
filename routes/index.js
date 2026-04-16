@@ -158,11 +158,12 @@ router.post('/quiz-score', async (req, res) => {
   try {
     const { userId, subject, difficulty, correct, total } = req.body;
     if (correct === undefined || total === undefined) return res.status(400).json({ error: 'Score data required' });
-    await memoryService.saveQuizScore(userId || 'guest', subject || 'General', difficulty || 'Intermediate', correct, total);
+    if (!userId || userId === 'guest') return res.status(400).json({ error: 'Valid userId required to save score' });
+    await memoryService.saveQuizScore(userId, subject || 'General', difficulty || 'Intermediate', correct, total);
     res.json({ status: 'success' });
   } catch (error) {
-    console.error('Save score error:', error);
-    res.status(500).json({ error: 'Failed to save score' });
+    console.error('Save score error:', error.message);
+    res.status(500).json({ error: error.message || 'Failed to save score' });
   }
 });
 

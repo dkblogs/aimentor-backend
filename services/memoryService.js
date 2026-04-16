@@ -5,7 +5,7 @@ class MemoryService {
     const { error } = await supabase
       .from('chat_history')
       .insert({ user_id: userId, message, response });
-    if (error) console.error('Save history error:', error.message);
+    if (error) console.error('Save history error:', error.code, error.message);
   }
 
   async getHistory(userId) {
@@ -53,7 +53,10 @@ class MemoryService {
     const { error } = await supabase
       .from('quiz_scores')
       .insert({ user_id: userId, subject, difficulty, score: correct, total });
-    if (error) console.error('Save score error:', error.message);
+    if (error) {
+      console.error('Save score error:', error.code, error.message);
+      throw error; // surface to route so we can return a real error response
+    }
   }
 
   async getQuizScores(userId) {
