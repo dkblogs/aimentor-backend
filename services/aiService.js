@@ -221,10 +221,11 @@ After the lesson content add exactly: "FOLLOWUPS: question1 | question2 | questi
 }
 
 // ── Quiz generation ───────────────────────────────────────────────────────────
-async function generateQuiz(subject = "General", difficulty = "Intermediate", classLevel = 9, language = "en", topic = null, weakAreas = []) {
+async function generateQuiz(subject = "General", difficulty = "Intermediate", classLevel = 9, language = "en", topic = null, weakAreas = [], numQuestions = 5) {
   try {
     const diffNote = DIFFICULTY_NOTES[difficulty] || DIFFICULTY_NOTES.Intermediate;
     const langNote = buildLangInstruction(language);
+    const n = Math.min(Math.max(parseInt(numQuestions) || 5, 3), 20);
 
     const topicLine = topic
       ? `Focus ONLY on the topic: "${topic}" from the NCERT Class ${classLevel} ${subject} textbook.`
@@ -234,7 +235,7 @@ async function generateQuiz(subject = "General", difficulty = "Intermediate", cl
       ? `\nADAPTIVE: The student has previously answered these questions/concepts incorrectly — include at least 2 questions that directly test these weak areas:\n${weakAreas.slice(0, 5).map((w, i) => `${i + 1}. ${w}`).join('\n')}`
       : '';
 
-    const prompt = `Generate a 5-question multiple choice quiz. ${diffNote} ${langNote}
+    const prompt = `Generate a ${n}-question multiple choice quiz. ${diffNote} ${langNote}
 ${topicLine}${weakNote}
 Questions must be strictly based on the NCERT Class ${classLevel} ${subject} textbook.
 Return ONLY valid JSON, no markdown:
@@ -245,12 +246,13 @@ Return ONLY valid JSON, no markdown:
   ]
 }`;
 
+    const maxTokens = Math.min(400 + n * 200, 3000);
     const completion = await chatWithFallback(
       [
         { role: "system", content: "You are a quiz generator. Return only valid JSON, no extra text." },
         { role: "user",   content: prompt },
       ],
-      { temperature: 0.5, max_tokens: 1200 }
+      { temperature: 0.5, max_tokens: maxTokens }
     );
 
     const rawText  = completion.choices[0]?.message?.content?.trim() || "";

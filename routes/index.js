@@ -156,7 +156,7 @@ router.post('/analyze', async (req, res) => {
 // ── Topic-based adaptive quiz generation ─────────────────────────────────────
 router.post('/quiz-generate', async (req, res) => {
   try {
-    const { subject = 'General', topic = null, difficulty = 'Intermediate', userId, classLevel = 9, language = 'en' } = req.body;
+    const { subject = 'General', topic = null, difficulty = 'Intermediate', userId, classLevel = 9, language = 'en', numQuestions = 5 } = req.body;
     if (!process.env.OPENROUTER_API_KEY) return res.status(503).json({ error: 'OPENROUTER_API_KEY not configured' });
 
     // Fetch weak areas for this user+subject to make quiz adaptive
@@ -166,7 +166,8 @@ router.post('/quiz-generate', async (req, res) => {
       weakAreas = weak.map(w => w.question);
     }
 
-    const result = await generateQuiz(subject, difficulty, classLevel, language, topic, weakAreas);
+    const clampedNum = Math.min(Math.max(parseInt(numQuestions) || 5, 3), 20);
+    const result = await generateQuiz(subject, difficulty, classLevel, language, topic, weakAreas, clampedNum);
     res.json({ ...result, topic });
   } catch (error) {
     console.error('Quiz generate error:', error.message);
@@ -180,7 +181,7 @@ router.post('/quiz-score', async (req, res) => {
     const { userId, subject, topic, difficulty, correct, total, details } = req.body;
     if (correct === undefined || total === undefined) return res.status(400).json({ error: 'Score data required' });
     if (!userId || userId === 'guest') return res.status(400).json({ error: 'Valid userId required to save score' });
-    await memoryService.saveQuizScore(userId, subject || 'General', difficulty || 'Intermediate', correct, total, topic || null);
+    await memoryService.saveQuizScore(userId, subject || 'General', difficulty || 'Intermediate', correct, total, topic || null, details?.length ? details : null);
     // Save per-question details for adaptive quiz
     if (details?.length) {
       await memoryService.saveQuizDetails(userId, subject || 'General', topic || null, details);

@@ -49,10 +49,10 @@ class MemoryService {
     return data || null;
   }
 
-  async saveQuizScore(userId, subject, difficulty, correct, total, topic = null) {
+  async saveQuizScore(userId, subject, difficulty, correct, total, topic = null, details = null) {
     const { data, error } = await supabase
       .from('quiz_scores')
-      .insert({ user_id: userId, subject, difficulty, score: correct, total, topic })
+      .insert({ user_id: userId, subject, difficulty, score: correct, total, topic, details })
       .select('id')
       .single();
     if (error) {
@@ -96,7 +96,7 @@ class MemoryService {
   async getQuizScores(userId) {
     const { data, error } = await supabase
       .from('quiz_scores')
-      .select('id, subject, difficulty, score, total, created_at')
+      .select('id, subject, difficulty, score, total, topic, details, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(50);
