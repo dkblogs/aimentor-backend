@@ -49,14 +49,48 @@ class MemoryService {
     return data || null;
   }
 
-  async saveQuizScore(userId, subject, difficulty, correct, total) {
-    const { error } = await supabase
+  async saveQuizScore(userId, subject, difficulty, correct, total, topic = null) {
+    const { data, error } = await supabase
       .from('quiz_scores')
-      .insert({ user_id: userId, subject, difficulty, score: correct, total });
+      .insert({ user_id: userId, subject, difficulty, score: correct, total, topic })
+      .select('id')
+      .single();
     if (error) {
       console.error('Save score error:', error.code, error.message);
-      throw error; // surface to route so we can return a real error response
+      throw error;
     }
+    return data?.id; // return id so caller can link quiz_details rows
+  }
+
+  // Save per-question results for adaptive quiz generation
+  async saveQuizDetails(userId, subject, topic, details) {
+    if (!details?.length) return;
+    const rows = details.map(d => ({
+      user_id:        userId,
+      subject,
+      topic:          topic || null,
+      question:       d.question,
+      user_answer:    d.userAnswer || null,
+      correct_answer: d.correctAnswer,
+      is_correct:     d.isCorrect,
+    }));
+    const { error } = await supabase.from('quiz_details').insert(rows);
+    if (error) console.error('Save quiz details error:', error.code, error.message);
+  }
+
+  // Fetch questions the student has answered incorrectly — used for adaptive quiz prompts
+  async getWeakAreas(userId, subject = null, limit = 10) {
+    let query = supabase
+      .from('quiz_details')
+      .select('question, subject, topic, correct_answer')
+      .eq('user_id', userId)
+      .eq('is_correct', false)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (subject) query = query.eq('subject', subject);
+    const { data, error } = await query;
+    if (error) { console.error('Get weak areas error:', error.message); return []; }
+    return data || [];
   }
 
   async getQuizScores(userId) {

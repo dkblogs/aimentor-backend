@@ -153,13 +153,38 @@ router.post('/analyze', async (req, res) => {
   }
 });
 
+// ── Topic-based adaptive quiz generation ─────────────────────────────────────
+router.post('/quiz-generate', async (req, res) => {
+  try {
+    const { subject = 'General', topic = null, difficulty = 'Intermediate', userId, classLevel = 9, language = 'en' } = req.body;
+    if (!process.env.OPENROUTER_API_KEY) return res.status(503).json({ error: 'OPENROUTER_API_KEY not configured' });
+
+    // Fetch weak areas for this user+subject to make quiz adaptive
+    let weakAreas = [];
+    if (userId && userId !== 'guest') {
+      const weak = await memoryService.getWeakAreas(userId, subject, 8);
+      weakAreas = weak.map(w => w.question);
+    }
+
+    const result = await generateQuiz(subject, difficulty, classLevel, language, topic, weakAreas);
+    res.json({ ...result, topic });
+  } catch (error) {
+    console.error('Quiz generate error:', error.message);
+    res.status(500).json({ error: 'Failed to generate quiz' });
+  }
+});
+
 // ── Quiz score ────────────────────────────────────────────────────────────────
 router.post('/quiz-score', async (req, res) => {
   try {
-    const { userId, subject, difficulty, correct, total } = req.body;
+    const { userId, subject, topic, difficulty, correct, total, details } = req.body;
     if (correct === undefined || total === undefined) return res.status(400).json({ error: 'Score data required' });
     if (!userId || userId === 'guest') return res.status(400).json({ error: 'Valid userId required to save score' });
-    await memoryService.saveQuizScore(userId, subject || 'General', difficulty || 'Intermediate', correct, total);
+    await memoryService.saveQuizScore(userId, subject || 'General', difficulty || 'Intermediate', correct, total, topic || null);
+    // Save per-question details for adaptive quiz
+    if (details?.length) {
+      await memoryService.saveQuizDetails(userId, subject || 'General', topic || null, details);
+    }
     res.json({ status: 'success' });
   } catch (error) {
     console.error('Save score error:', error.message);

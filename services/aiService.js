@@ -221,15 +221,25 @@ After the lesson content add exactly: "FOLLOWUPS: question1 | question2 | questi
 }
 
 // ── Quiz generation ───────────────────────────────────────────────────────────
-async function generateQuiz(subject = "General", difficulty = "Intermediate", classLevel = 9, language = "en") {
+async function generateQuiz(subject = "General", difficulty = "Intermediate", classLevel = 9, language = "en", topic = null, weakAreas = []) {
   try {
     const diffNote = DIFFICULTY_NOTES[difficulty] || DIFFICULTY_NOTES.Intermediate;
     const langNote = buildLangInstruction(language);
-    const prompt = `Generate a 5-question multiple choice quiz on NCERT Class ${classLevel} ${subject} at ${difficulty} level. ${diffNote} ${langNote}
-Questions must be strictly based on the NCERT Class ${classLevel} ${subject} textbook syllabus.
+
+    const topicLine = topic
+      ? `Focus ONLY on the topic: "${topic}" from the NCERT Class ${classLevel} ${subject} textbook.`
+      : `Cover the NCERT Class ${classLevel} ${subject} syllabus broadly.`;
+
+    const weakNote = weakAreas.length > 0
+      ? `\nADAPTIVE: The student has previously answered these questions/concepts incorrectly — include at least 2 questions that directly test these weak areas:\n${weakAreas.slice(0, 5).map((w, i) => `${i + 1}. ${w}`).join('\n')}`
+      : '';
+
+    const prompt = `Generate a 5-question multiple choice quiz. ${diffNote} ${langNote}
+${topicLine}${weakNote}
+Questions must be strictly based on the NCERT Class ${classLevel} ${subject} textbook.
 Return ONLY valid JSON, no markdown:
 {
-  "intro": "Here is your Class ${classLevel} ${subject} quiz!",
+  "intro": "Here is your ${topic ? topic : `Class ${classLevel} ${subject}`} quiz!",
   "questions": [
     { "question": "...", "options": ["A) ...", "B) ...", "C) ...", "D) ..."], "answer": "A) ..." }
   ]
@@ -336,3 +346,6 @@ Provide a concise but insightful analysis. Return ONLY valid JSON:
 }
 
 module.exports = { generateResponse, generateResponseStream, generateQuiz, teachLesson, analyzeStudentPerformance };
+
+// named re-export so routes can call generateQuiz with named args clearly
+module.exports.generateQuiz = generateQuiz;
