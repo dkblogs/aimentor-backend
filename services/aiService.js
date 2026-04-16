@@ -22,16 +22,26 @@ const DIFFICULTY_NOTES = {
   Advanced:     "Use technical language, go deep, include edge cases and nuances.",
 };
 
-const LANGUAGE_INSTRUCTION = `CRITICAL LANGUAGE RULE: Detect the language of the user's message and respond ENTIRELY in that same language. If the user writes in Hindi, respond in Hindi. If in Hinglish (Hindi+English mix), respond in Hinglish. If in Tamil, respond in Tamil. If in any regional language, respond in that language. Never switch languages unless the user does. Do NOT translate or summarise in another language.`;
+// Build an explicit language instruction based on the selected language code
+function buildLangInstruction(language) {
+  const map = {
+    en: "CRITICAL: Respond in English ONLY. Do NOT use Hindi or any other language regardless of chat history or context. Every word of your response must be in English.",
+    hi: "CRITICAL: Respond in Hindi (हिंदी) ONLY. Write every word in Hindi (Devanagari script). You may keep scientific/technical terms in English but explain them in Hindi.",
+    ta: "CRITICAL: Respond in Tamil (தமிழ்) ONLY. Write every word in Tamil script. You may keep scientific/technical terms in English.",
+    te: "CRITICAL: Respond in Telugu (తెలుగు) ONLY. Write every word in Telugu script. You may keep scientific/technical terms in English.",
+    mr: "CRITICAL: Respond in Marathi (मराठी) ONLY. Write every word in Marathi (Devanagari script). You may keep scientific/technical terms in English.",
+    bn: "CRITICAL: Respond in Bengali (বাংলা) ONLY. Write every word in Bengali script. You may keep scientific/technical terms in English.",
+    ar: "CRITICAL: Respond in Arabic (العربية) ONLY. Write every word in Arabic script. You may keep scientific/technical terms in English.",
+  };
+  return map[language] || map.en;
+}
 
 // ── Chat with follow-ups ──────────────────────────────────────────────────────
 async function generateResponse(message, subject = "General", history = [], difficulty = "Intermediate", language = "en") {
   try {
     const subjectPrompt = SUBJECT_PROMPTS[subject] || SUBJECT_PROMPTS.General;
     const diffNote      = DIFFICULTY_NOTES[difficulty] || DIFFICULTY_NOTES.Intermediate;
-    const langInstruction = language && language !== "en"
-      ? `CRITICAL: You MUST respond ENTIRELY in the language with code "${language}". Do NOT use English except for technical/scientific terms. Write everything — explanations, examples, follow-up questions — in that language.`
-      : LANGUAGE_INSTRUCTION;
+    const langInstruction = buildLangInstruction(language);
     const systemPrompt  = `${subjectPrompt} ${diffNote} ${langInstruction} After your answer, add exactly this line: "FOLLOWUPS: question1 | question2 | question3" with 3 short follow-up questions the student might ask next (write them in the same language as your response).`;
 
     const historyMessages = history.slice(-5).flatMap(h => [
@@ -72,9 +82,7 @@ async function teachLesson(subject = "General", topic, difficulty = "Intermediat
       ? `This is Chapter ${chapter} of the NCERT Class ${classLevel} ${subject} textbook.`
       : `This is from the NCERT Class ${classLevel} ${subject} syllabus.`;
 
-    const langNote   = language && language !== "en"
-      ? `IMPORTANT: Deliver this entire lesson in the student's preferred language (detected: "${language}"). Use their language for all explanations, examples, and key terms — you may keep technical/scientific terms in English where appropriate.`
-      : LANGUAGE_INSTRUCTION;
+    const langNote = buildLangInstruction(language);
 
     const prompt = `You are an expert ${subject} teacher for NCERT Class ${classLevel} students. Deliver a clear, engaging structured lesson.
 
@@ -137,9 +145,7 @@ After the lesson content add exactly: "FOLLOWUPS: question1 | question2 | questi
 async function generateQuiz(subject = "General", difficulty = "Intermediate", classLevel = 9, language = "en") {
   try {
     const diffNote = DIFFICULTY_NOTES[difficulty] || DIFFICULTY_NOTES.Intermediate;
-    const langNote = language && language !== "en"
-      ? `Write all questions and options in the student's language (detected: "${language}"). You may keep scientific/technical terms in English.`
-      : ``;
+    const langNote = buildLangInstruction(language);
     const prompt = `Generate a 5-question multiple choice quiz on NCERT Class ${classLevel} ${subject} at ${difficulty} level. ${diffNote} ${langNote}
 Questions must be strictly based on the NCERT Class ${classLevel} ${subject} textbook syllabus.
 Return ONLY valid JSON, no markdown:
