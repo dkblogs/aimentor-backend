@@ -1,12 +1,8 @@
 const OpenAI = require("openai");
 
 const openrouter = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENROUTER_API_KEY,
-  defaultHeaders: {
-    "HTTP-Referer": process.env.FRONTEND_URL || "https://aimentor.vercel.app",
-    "X-Title": "AI Mentor",
-  },
+  baseURL: "https://ai-gateway-7z6h.onrender.com/v1",
+  apiKey: process.env.AI_GATEWAY_KEY || "ak_ai-mentor_pbdSsy0ATkufDybXQGIWMRjK",
 });
 
 // Models in fallback order — if primary is rate-limited, try next
@@ -16,7 +12,7 @@ const MODELS = [
   "google/gemma-4-26-a4b-it:free",
 ];
 
-async function chatWithFallback(messages, { temperature = 0.7, max_tokens = 1200 } = {}) {
+async function chatWithFallback(messages, { temperature = 0.7, max_tokens = 1200, task_type = "default" } = {}) {
   let lastError;
   for (const model of MODELS) {
     try {
@@ -25,6 +21,7 @@ async function chatWithFallback(messages, { temperature = 0.7, max_tokens = 1200
         messages,
         temperature,
         max_tokens,
+        task_type,
       });
       return completion;
     } catch (err) {
@@ -39,7 +36,7 @@ async function chatWithFallback(messages, { temperature = 0.7, max_tokens = 1200
   throw lastError;
 }
 
-async function chatWithFallbackStream(messages, { temperature = 0.7, max_tokens = 1200 } = {}) {
+async function chatWithFallbackStream(messages, { temperature = 0.7, max_tokens = 1200, task_type = "default" } = {}) {
   let lastError;
   for (const model of MODELS) {
     try {
@@ -49,6 +46,7 @@ async function chatWithFallbackStream(messages, { temperature = 0.7, max_tokens 
         temperature,
         max_tokens,
         stream: true,
+        task_type,
       });
       return stream;
     } catch (err) {
@@ -118,7 +116,7 @@ async function generateResponse(message, subject = "General", history = [], diff
         ...historyMessages,
         { role: "user",   content: message },
       ],
-      { temperature: 0.7, max_tokens: 1200 }
+      { temperature: 0.7, max_tokens: 1200, task_type: "student_qa" }
     );
 
     const full = completion.choices[0]?.message?.content || "";
@@ -153,7 +151,7 @@ async function generateResponseStream(message, subject = "General", history = []
       ...historyMessages,
       { role: "user",   content: message },
     ],
-    { temperature: 0.7, max_tokens: 1200 }
+    { temperature: 0.7, max_tokens: 1200, task_type: "student_qa" }
   );
 }
 
@@ -205,7 +203,7 @@ After the lesson content add exactly: "FOLLOWUPS: question1 | question2 | questi
         { role: "system", content: `You are an expert ${subject} teacher for NCERT Class ${classLevel}. Deliver structured, engaging lessons using markdown. Stay aligned with NCERT content. ${langNote}` },
         { role: "user",   content: prompt },
       ],
-      { temperature: 0.65, max_tokens: 1500 }
+      { temperature: 0.65, max_tokens: 1500, task_type: "lesson_teach" }
     );
 
     const full = completion.choices[0]?.message?.content || "";
@@ -254,7 +252,7 @@ Return ONLY valid JSON, no markdown:
         { role: "system", content: "You are a quiz generator. Return only valid JSON, no extra text." },
         { role: "user",   content: prompt },
       ],
-      { temperature: 0.5, max_tokens: maxTokens }
+      { temperature: 0.5, max_tokens: maxTokens, task_type: "quiz_generate" }
     );
 
     const rawText  = completion.choices[0]?.message?.content?.trim() || "";
@@ -329,7 +327,7 @@ Provide a concise but insightful analysis. Return ONLY valid JSON:
         { role: "system", content: "You are a data-driven academic mentor. Write specific, encouraging, actionable feedback. Return only valid JSON." },
         { role: "user",   content: prompt },
       ],
-      { temperature: 0.5, max_tokens: 500 }
+      { temperature: 0.5, max_tokens: 500, task_type: "progress_report" }
     );
 
     const raw   = completion.choices[0]?.message?.content?.trim() || "{}";
