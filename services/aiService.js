@@ -5,60 +5,28 @@ const openrouter = new OpenAI({
   apiKey: process.env.AI_GATEWAY_KEY || "ak_ai-mentor_pbdSsy0ATkufDybXQGIWMRjK",
 });
 
-// Models in fallback order — if primary is rate-limited, try next
-const MODELS = [
-  "openai/gpt-oss-120b:free",
-  "qwen/qwen3-next-80b-a3b-instruct:free",
-  "google/gemma-4-26-a4b-it:free",
-];
+// Gateway handles model routing internally via task_type
+const GATEWAY_MODEL = "llama-3.3-70b-versatile";
 
 async function chatWithFallback(messages, { temperature = 0.7, max_tokens = 1200, task_type = "default" } = {}) {
-  let lastError;
-  for (const model of MODELS) {
-    try {
-      const completion = await openrouter.chat.completions.create({
-        model,
-        messages,
-        temperature,
-        max_tokens,
-        task_type,
-      });
-      return completion;
-    } catch (err) {
-      if (err.status === 429 || err.status === 503 || err.status === 502) {
-        console.warn(`Model ${model} unavailable (${err.status}), trying next…`);
-        lastError = err;
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw lastError;
+  return openrouter.chat.completions.create({
+    model: GATEWAY_MODEL,
+    messages,
+    temperature,
+    max_tokens,
+    task_type,
+  });
 }
 
 async function chatWithFallbackStream(messages, { temperature = 0.7, max_tokens = 1200, task_type = "default" } = {}) {
-  let lastError;
-  for (const model of MODELS) {
-    try {
-      const stream = await openrouter.chat.completions.create({
-        model,
-        messages,
-        temperature,
-        max_tokens,
-        stream: true,
-        task_type,
-      });
-      return stream;
-    } catch (err) {
-      if (err.status === 429 || err.status === 503 || err.status === 502) {
-        console.warn(`Stream: model ${model} unavailable (${err.status}), trying next…`);
-        lastError = err;
-        continue;
-      }
-      throw err;
-    }
-  }
-  throw lastError;
+  return openrouter.chat.completions.create({
+    model: GATEWAY_MODEL,
+    messages,
+    temperature,
+    max_tokens,
+    stream: true,
+    task_type,
+  });
 }
 
 const MATH_NOTE = "IMPORTANT: Write all mathematical expressions and chemical formulas using LaTeX delimiters: $...$ for inline math (e.g. $F = ma$, $H_2O$) and $$...$$ on its own line for display equations (e.g. $$E = mc^2$$). Never write raw LaTeX like \\displaystyle outside delimiters.";
